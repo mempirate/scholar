@@ -1,74 +1,52 @@
 package slack
 
 import (
+	"context"
+	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/slack-go/slack/socketmode"
 
+	"github.com/mempirate/scholar/backend"
 	"github.com/mempirate/scholar/log"
+	"github.com/mempirate/scholar/util"
 )
 
 // https://stackoverflow.com/a/3809435
 const URL_REGEX = `https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)`
 
 const (
-	ReplyMissingURL = "There doesn't seem to be a URL in your message."
+	ReplyMissingURL     = "There doesn't seem to be a URL in your message."
+	ReplyDownloadFailed = "Failed to download the PDF. Please try again later."
 )
-
-type EventType string
-
-const (
-	// EventTypeUpload requires a file to be uploaded.
-	EventTypeUpload EventType = "upload"
-	// EventTypePrompt is a prompt event, where the bot is addressed.
-	EventTypePrompt EventType = "prompt"
-	// EventTypeMessage is a message event, without addressing the bot.
-	EventTypeMessage EventType = "message"
-)
-
-// HandlerEvent is an event originating from a handler.
-type HandlerEvent struct {
-}
 
 type SlackHandler struct {
-	log    zerolog.Logger
-	client *socketmode.Client
-	events chan HandlerEvent
+	log     zerolog.Logger
+	client  *socketmode.Client
+	backend backend.ScholarBackend
 
 	urlRegex *regexp.Regexp
 
-	threadCache map[string]struct{}
+	// TODO: limit this map
+	processingCache map[string]struct{}
 }
 
-func NewSlackHandler(appToken, botToken string) *SlackHandler {
-	api := slack.New(
-		botToken,
-		// slack.OptionDebug(true),
-		// slack.OptionLog(log.New(os.Stdout, "api: ", log.Lshortfile|log.LstdFlags)),
-		slack.OptionAppLevelToken(appToken),
-	)
+func NewSlackHandler(appToken, botToken string, backend backend.ScholarBackend) *SlackHandler {
+	api := slack.New(botToken, slack.OptionAppLevelToken(appToken))
 
-	client := socketmode.New(
-		api,
-		// socketmode.OptionDebug(true),
-		// socketmode.OptionLog(log.New(os.Stdout, "socketmode: ", log.Lshortfile|log.LstdFlags)),
-	)
+	client := socketmode.New(api)
 
 	return &SlackHandler{
-		log:      log.NewLogger("slack"),
-		client:   client,
-		urlRegex: regexp.MustCompile(URL_REGEX),
-		// TODO: bound map
-		threadCache: make(map[string]struct{}),
+		log:             log.NewLogger("slack"),
+		client:          client,
+		urlRegex:        regexp.MustCompile(URL_REGEX),
+		backend:         backend,
+		processingCache: make(map[string]struct{}),
 	}
-}
-
-// EventStream returns a channel that receives events from Slack.
-func (s *SlackHandler) EventStream() chan HandlerEvent {
-	return s.events
 }
 
 func (s *SlackHandler) Start() {
@@ -123,8 +101,17 @@ func (s *SlackHandler) onEvent(event slackevents.EventsAPIEvent) error {
 }
 
 func (s *SlackHandler) onAppMention(event *slackevents.AppMentionEvent) error {
+	// TODO: check if this is a message inside a thread, or a thread starter!
 	// Thread ID is determined by the timestamp
 	threadID := event.TimeStamp
+
+	// Check if we're already processing this thread
+	if _, ok := s.processingCache[threadID]; ok {
+		return nil
+	}
+
+	// Else add to cache
+	s.processingCache[threadID] = struct{}{}
 
 	// Extract all URLs
 	url := s.urlRegex.FindString(event.Text)
@@ -137,9 +124,39 @@ func (s *SlackHandler) onAppMention(event *slackevents.AppMentionEvent) error {
 
 	s.log.Info().Str("url", url).Str("ts", threadID).Msg("New URL received, starting upload...")
 
-	// TODO:
-	// - Cache parentTs
-	// - Emit event and spawn goroutine to handle response
+	path, err := util.DownloadPDF(url)
+	if err != nil {
+		s.log.Error().Err(err).Str("url", url).Msg("Failed to download PDF")
+		// TODO: See if error is retryable or user-facing, and respond accordingly
+		s.client.PostMessage(event.Channel, slack.MsgOptionText(fmt.Sprintf("%s (error: %s)", ReplyDownloadFailed, err), false), slack.MsgOptionTS(threadID))
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	s.backend.CreateThread(ctx, threadID)
+
+	ctx, cancel = context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if err := s.backend.UploadFile(ctx, threadID, path); err != nil {
+		s.log.Error().Err(err).Msg("Failed to upload file")
+		// This should def be retried
+		return err
+	}
+
+	s.log.Debug().Str("url", url).Msg("PDF uploaded successfully, prompting for summary...")
+
+	summary, err := s.backend.Prompt(ctx, threadID, fmt.Sprintf("Please provide a summary of this file: %s. Disregard the path. Always mention the title of the paper, not the file name. Only use a single reference per unique file.", path))
+	if err != nil {
+		s.log.Error().Err(err).Msg("Failed to prompt for summary")
+		return err
+	}
+
+	// TODO: error handling (also wrap this in func)
+	s.client.PostMessage(event.Channel, slack.MsgOptionText(summary, true), slack.MsgOptionTS(threadID), slack.MsgOptionPostMessageParameters(slack.PostMessageParameters{
+		Markdown: true,
+	}))
 
 	return nil
 }
