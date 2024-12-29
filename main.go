@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mempirate/scholar/slack"
 	"github.com/openai/openai-go"
 )
 
@@ -14,9 +15,9 @@ const VECTOR_STORE_NAME = "ScholarVectorStore"
 const OPENAI_MODEL = openai.ChatModelGPT4oMini
 
 func main() {
-	key := os.Getenv("OPENAI_API_KEY")
-	if key == "" {
-		panic("OPENAI_API_KEY is not set")
+	key, appToken, botToken := os.Getenv("OPENAI_API_KEY"), os.Getenv("SLACK_APP_TOKEN"), os.Getenv("SLACK_BOT_TOKEN")
+	if key == "" || appToken == "" || botToken == "" {
+		panic("OPENAI_API_KEY || SLACK_APP_TOKEN || SLACK_BOT_TOKEN is not set")
 	}
 
 	backend := NewBackend(key)
@@ -30,9 +31,20 @@ func main() {
 
 	log.Info().Msg("Backend initialized")
 
-	// backend.uploadDocument(ctx, "testdata/FastPay.pdf")
+	slack := slack.NewSlackHandler(appToken, botToken)
 
-	thread, err := backend.client.Beta.Threads.New(ctx, openai.BetaThreadNewParams{})
+	slack.Start()
+
+	return
+
+	// backend.uploadDocument(ctx, "testdata/FastPay.pdf")
+	thread, err := backend.getOrCreateThread(ctx, "abc")
+	if err != nil {
+		panic(err)
+	}
+	return
+
+	thread, err = backend.client.Beta.Threads.New(ctx, openai.BetaThreadNewParams{})
 	if err != nil {
 		panic(err)
 	}

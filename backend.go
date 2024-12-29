@@ -4,11 +4,14 @@ import (
 	"context"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+
+	"github.com/mempirate/scholar/log"
 )
 
 // Backend manages interactions with the OpenAI API and is responsible for
@@ -23,7 +26,7 @@ type Backend struct {
 }
 
 func NewBackend(apiKey string) *Backend {
-	log := NewLogger("scholar")
+	log := log.NewLogger("scholar")
 
 	log.Info().Msg("Initializing OpenAI client")
 	client := openai.NewClient(
@@ -46,7 +49,7 @@ func (b *Backend) init(ctx context.Context) error {
 
 	b.assistant = assistant
 
-	vectorStore, err := b.getOrCreateVectorStore(ctx)
+	vectorStore, err := b.getOrCreateVectorStore(ctx, VECTOR_STORE_NAME)
 	if err != nil {
 		return err
 	}
@@ -111,14 +114,14 @@ func (b *Backend) getOrCreateAssistant(ctx context.Context) (*openai.Assistant, 
 // The vector store is used to store document embeddings for the file search tool of the assistant.
 // It will expire after 30 days of inactivity.
 // https://github.com/openai/openai-go/blob/main/examples/beta/vectorstorefilebatch/main.go
-func (b *Backend) getOrCreateVectorStore(ctx context.Context) (*openai.VectorStore, error) {
+func (b *Backend) getOrCreateVectorStore(ctx context.Context, name string) (*openai.VectorStore, error) {
 	stores, err := b.client.Beta.VectorStores.List(ctx, openai.BetaVectorStoreListParams{})
 	if err != nil {
 		return nil, err
 	}
 
 	for _, store := range stores.Data {
-		if store.Name == VECTOR_STORE_NAME {
+		if store.Name == name {
 			b.log.Debug().Msg("Existing vector store found")
 			return &store, nil
 		}
@@ -132,7 +135,7 @@ func (b *Backend) getOrCreateVectorStore(ctx context.Context) (*openai.VectorSto
 				// Expires after 30 days of inactivity
 				Days: openai.Int(30),
 			}),
-			Name: openai.String(VECTOR_STORE_NAME),
+			Name: openai.String(name),
 		},
 	)
 
@@ -175,4 +178,32 @@ func (b *Backend) getFileName(ctx context.Context, id string) (string, error) {
 	}
 
 	return f.Filename, nil
+}
+
+// getOrCreateThread gets or creates a thread with the given ID.
+func (b *Backend) getOrCreateThread(ctx context.Context, id string) (*openai.Thread, error) {
+	thread, err := b.client.Beta.Threads.Get(ctx, id)
+	// If the thread does not exist, don't return the error
+	if err != nil && !isNotFoundError(err) {
+		return nil, err
+	}
+
+	// Double check if the thread exists
+	if thread != nil {
+		b.log.Debug().Str("id", thread.ID).Msg("Existing thread found")
+		return thread, nil
+	}
+
+	thread, err = b.client.Beta.Threads.New(ctx, openai.BetaThreadNewParams{})
+	if err != nil {
+		return nil, err
+	}
+
+	b.log.Debug().Str("id", thread.ID).Msg("Thread created")
+
+	return thread, nil
+}
+
+func isNotFoundError(err error) bool {
+	return strings.Contains(err.Error(), "404")
 }
