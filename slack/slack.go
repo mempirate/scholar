@@ -3,6 +3,7 @@ package slack
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"time"
 
@@ -21,6 +22,7 @@ const URL_REGEX = `https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9(
 
 const (
 	ReplyMissingURL     = "There doesn't seem to be a URL in your message."
+	ReplyInvalidURL     = "The URL you provided is invalid. Please provide a valid URL."
 	ReplyDownloadFailed = "Failed to download the PDF. Please try again later."
 )
 
@@ -114,19 +116,26 @@ func (s *SlackHandler) onAppMention(event *slackevents.AppMentionEvent) error {
 	s.processingCache[threadID] = struct{}{}
 
 	// Extract all URLs
-	url := s.urlRegex.FindString(event.Text)
+	urlStr := s.urlRegex.FindString(event.Text)
 
-	if url == "" {
+	if urlStr == "" {
 		s.log.Debug().Str("text", event.Text).Msg("Ignoring event without URL")
 		s.client.PostMessage(event.Channel, slack.MsgOptionText(ReplyMissingURL, false), slack.MsgOptionTS(threadID))
 		return nil
 	}
 
-	s.log.Info().Str("url", url).Str("ts", threadID).Msg("New URL received, starting upload...")
+	url, err := url.Parse(urlStr)
+	if err != nil {
+		s.log.Error().Err(err).Str("url", urlStr).Msg("Failed to parse URL")
+		s.client.PostMessage(event.Channel, slack.MsgOptionText(ReplyInvalidURL, false), slack.MsgOptionTS(threadID))
+		return nil
+	}
+
+	s.log.Info().Str("url", urlStr).Str("ts", threadID).Msg("New URL received, starting upload...")
 
 	path, err := util.DownloadPDF(url)
 	if err != nil {
-		s.log.Error().Err(err).Str("url", url).Msg("Failed to download PDF")
+		s.log.Error().Err(err).Str("url", urlStr).Msg("Failed to download PDF")
 		// TODO: See if error is retryable or user-facing, and respond accordingly
 		s.client.PostMessage(event.Channel, slack.MsgOptionText(fmt.Sprintf("%s (error: %s)", ReplyDownloadFailed, err), false), slack.MsgOptionTS(threadID))
 		return nil
@@ -145,7 +154,7 @@ func (s *SlackHandler) onAppMention(event *slackevents.AppMentionEvent) error {
 		return err
 	}
 
-	s.log.Debug().Str("url", url).Msg("PDF uploaded successfully, prompting for summary...")
+	s.log.Debug().Str("url", urlStr).Msg("PDF uploaded successfully, prompting for summary...")
 
 	summary, err := s.backend.Prompt(ctx, threadID, fmt.Sprintf("Please provide a summary of this file: %s. Disregard the path. Always mention the title of the paper, not the file name. Only use a single reference per unique file.", path))
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -30,12 +31,22 @@ func FormatBytes(bytes int64) string {
 }
 
 // DownloadPDF downloads a PDF from a URL and returns the path to the downloaded file.
-func DownloadPDF(url string) (path string, err error) {
-	// Extract file name from URL
-	fileName := url[strings.LastIndex(url, "/")+1:]
+func DownloadPDF(url *url.URL) (path string, err error) {
+	// By default, fileName is the last part of the URL path.
+	fileName := url.Path[strings.LastIndex(url.Path, "/")+1:]
+
+	// If there is no path, set filename to the host
+	if fileName == "" {
+		host := strings.TrimPrefix(url.Host, "www.")
+		fileName = strings.ReplaceAll(host, ".", "-")
+	}
+
+	if !strings.HasSuffix(fileName, ".pdf") {
+		fileName += ".pdf"
+	}
 
 	// Get the data
-	resp, err := http.Get(url)
+	resp, err := http.Get(url.String())
 	if err != nil {
 		return "", fmt.Errorf("failed to download file: %w", err)
 	}
@@ -48,10 +59,6 @@ func DownloadPDF(url string) (path string, err error) {
 	}
 
 	reader := bufio.NewReader(resp.Body)
-
-	if !strings.HasSuffix(fileName, ".pdf") {
-		fileName += ".pdf"
-	}
 
 	const pdfMagicNumber = "%PDF-"
 	buf, err := reader.Peek(len(pdfMagicNumber))
