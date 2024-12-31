@@ -12,8 +12,10 @@ import (
 	"github.com/openai/openai-go/option"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/mempirate/scholar/log"
+	"github.com/mempirate/scholar/store"
 	"github.com/mempirate/scholar/util"
 )
 
@@ -44,11 +46,13 @@ type Backend struct {
 	assistant *openai.Assistant
 	store     *openai.VectorStore
 
+	localStore store.LocalStore
+
 	// threadCache is a cache that maps local IDs to openAI thread IDs.
 	threadCache map[string]*openai.Thread
 }
 
-func NewBackend(apiKey string, model openai.ChatModel) *Backend {
+func NewBackend(apiKey string, model openai.ChatModel, localStore store.LocalStore) *Backend {
 	log := log.NewLogger("scholar")
 
 	log.Info().Msg("Initializing OpenAI client")
@@ -62,6 +66,7 @@ func NewBackend(apiKey string, model openai.ChatModel) *Backend {
 		client:      client,
 		model:       model,
 		threadCache: make(map[string]*openai.Thread),
+		localStore:  localStore,
 	}
 }
 
@@ -92,6 +97,67 @@ func (b *Backend) Init(ctx context.Context) error {
 
 	if err != nil {
 		return err
+	}
+
+	if err := b.syncFiles(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SyncFiles syncs the local store with the remote store.
+func (b *Backend) syncFiles(ctx context.Context) error {
+	fileNames, err := b.localStore.List()
+	if err != nil {
+		return err
+	}
+
+	remoteFiles, err := b.client.Files.List(ctx, openai.FileListParams{})
+	if err != nil {
+		return errors.Wrap(err, "failed to list remote files")
+	}
+
+	remoteNames := make(map[string]struct{})
+
+	for _, file := range remoteFiles.Data {
+		remoteNames[file.Filename] = struct{}{}
+	}
+
+	eg := errgroup.Group{}
+
+	// Sync local files to remote store
+	for _, fileName := range fileNames {
+		if _, ok := remoteNames[fileName]; ok {
+			continue
+		}
+
+		func(fileName string) {
+			eg.Go(func() error {
+				b.log.Debug().Str("filename", fileName).Msg("Uploading local file")
+				f, err := b.localStore.Get(fileName)
+				if err != nil {
+					return err
+
+				}
+
+				defer f.Close()
+
+				vsFile, err := b.client.Beta.VectorStores.Files.UploadAndPoll(ctx, b.store.ID, openai.FileNewParams{
+					File: openai.F[io.Reader](f),
+					// Purpose of the file.
+					Purpose: openai.F(openai.FilePurposeAssistants),
+				}, 100)
+
+				if err != nil {
+					return errors.Wrap(err, "failed to upload document to vector store")
+				}
+
+				b.log.Info().Str("file", fileName).Str("size", util.FormatBytes(vsFile.UsageBytes)).Str("status", string(vsFile.Status)).Msg("Document uploaded")
+
+				return nil
+			})
+		}(fileName)
 	}
 
 	return nil
@@ -178,6 +244,8 @@ func (b *Backend) UploadFile(ctx context.Context, threadID, path string) error {
 	if err != nil {
 		errors.Wrap(err, "failed to open file")
 	}
+
+	defer f.Close()
 
 	b.log.Debug().Str("path", path).Msg("Uploading document")
 
