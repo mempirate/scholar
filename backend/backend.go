@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -125,6 +124,7 @@ func (b *Backend) syncFiles(ctx context.Context) error {
 	}
 
 	eg := errgroup.Group{}
+	eg.SetLimit(4)
 
 	// Sync local files to remote store
 	for _, fileName := range fileNames {
@@ -239,18 +239,11 @@ func (b *Backend) GetOrCreateVectorStore(ctx context.Context, name string) (*ope
 	return vectorStore, nil
 }
 
-func (b *Backend) UploadFile(ctx context.Context, threadID, path string) error {
-	f, err := os.Open(path)
-	if err != nil {
-		errors.Wrap(err, "failed to open file")
-	}
-
-	defer f.Close()
-
-	b.log.Debug().Str("path", path).Msg("Uploading document")
+func (b *Backend) UploadFile(ctx context.Context, name string, content io.Reader) error {
+	b.log.Debug().Str("name", name).Msg("Uploading document")
 
 	vsFile, err := b.client.Beta.VectorStores.Files.UploadAndPoll(ctx, b.store.ID, openai.FileNewParams{
-		File: openai.F[io.Reader](f),
+		File: openai.F(content),
 		// Purpose of the file.
 		Purpose: openai.F(openai.FilePurposeAssistants),
 	}, 100)
@@ -259,7 +252,7 @@ func (b *Backend) UploadFile(ctx context.Context, threadID, path string) error {
 		return errors.Wrap(err, "failed to upload document to vector store")
 	}
 
-	b.log.Info().Str("path", path).Str("size", util.FormatBytes(vsFile.UsageBytes)).Str("status", string(vsFile.Status)).Msg("Document uploaded")
+	b.log.Info().Str("name", name).Str("size", util.FormatBytes(vsFile.UsageBytes)).Str("status", string(vsFile.Status)).Msg("Document uploaded")
 
 	return nil
 }

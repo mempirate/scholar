@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 )
 
@@ -31,7 +30,7 @@ func FormatBytes(bytes int64) string {
 }
 
 // DownloadPDF downloads a PDF from a URL and returns the path to the downloaded file.
-func DownloadPDF(url *url.URL) (path string, err error) {
+func DownloadPDF(url *url.URL) (name string, body []byte, err error) {
 	// By default, fileName is the last part of the URL path.
 	fileName := url.Path[strings.LastIndex(url.Path, "/")+1:]
 
@@ -48,14 +47,14 @@ func DownloadPDF(url *url.URL) (path string, err error) {
 	// Get the data
 	resp, err := http.Get(url.String())
 	if err != nil {
-		return "", fmt.Errorf("failed to download file: %w", err)
+		return "", nil, fmt.Errorf("failed to download file: %w", err)
 	}
 
 	defer resp.Body.Close()
 
 	ct := resp.Header.Get("Content-Type")
 	if ct == "" && ct != "application/pdf" {
-		return "", fmt.Errorf("invalid content-type: %s", ct)
+		return "", nil, fmt.Errorf("invalid content-type: %s", ct)
 	}
 
 	reader := bufio.NewReader(resp.Body)
@@ -63,25 +62,19 @@ func DownloadPDF(url *url.URL) (path string, err error) {
 	const pdfMagicNumber = "%PDF-"
 	buf, err := reader.Peek(len(pdfMagicNumber))
 	if err != nil {
-		return "", fmt.Errorf("failed to read file header: %w", err)
+		return "", nil, fmt.Errorf("failed to read file header: %w", err)
 	}
 
 	if !bytes.Equal(buf, []byte(pdfMagicNumber)) {
-		return "", errors.New("invalid magic")
+		return "", nil, errors.New("invalid magic")
 	}
 
-	path = fmt.Sprintf("/tmp/%s", fileName)
-
-	// Create a temporary file
-	tmpFile, err := os.Create(path)
-
-	// Write the body to file
-	_, err = io.Copy(tmpFile, reader)
+	content, err := io.ReadAll(reader)
 	if err != nil {
-		return "", fmt.Errorf("failed to write to file: %w", err)
+		return "", nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	return path, nil
+	return fileName, content, nil
 }
 
 // generateRandomString creates a random string of the specified length in base64.
