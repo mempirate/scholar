@@ -67,8 +67,7 @@ func main() {
 			content, err := contentHandler.HandleURL(cmd.URL)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to handle URL")
-				// TODO: Send error message to Slack
-				// slack.PostEphemeral(channelID string, userID string, text string)
+				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, fmt.Sprintf("Failed to handle URL: %s (%s)", cmd.URL, err))
 				continue
 			}
 
@@ -83,7 +82,6 @@ func main() {
 
 				if contains {
 					log.Info().Str("name", content.Name).Msg("File already exists, skipping")
-					// TODO: Send error message to Slack
 					slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, "This file already exists.")
 					continue
 				}
@@ -92,7 +90,6 @@ func main() {
 			r := bytes.NewReader(content.Content)
 			if err := fileStore.Store(content.Name, r); err != nil {
 				log.Error().Err(err).Msg("Failed to store file locally")
-				// TODO: Send error message to Slack
 				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, err.Error())
 				continue
 			}
