@@ -20,3 +20,44 @@ The Slack integration currently works with 2 commands:
 
 - Upload a tweet: `/upload https://x.com/Euler__Lagrange/status/1874548493399769376`
 - Summarize the bitcoin whitepaper: `/summary https://bitcoin.org/bitcoin.pdf`
+
+## Content Types
+Scholar supports the following content types:
+- PDFs
+- Tweets
+
+With plans to support more in the future (like regular articles).
+
+### PDFs
+PDFs are currently downloaded from the link, verified to be a PDF, and then uploaded to the vector store as is. This
+can potentially be improved by extracting the text from the PDF with something like [markitdown](https://github.com/microsoft/markitdown)
+and upload that instead. Note sure of the added benefit of this yet.
+
+### Tweets
+> [!NOTE]
+> With a free plan, you can only call the Twitter API to retrieve a tweet once every 15 minutes.
+> If rate-limited, Scholar will return an error message. Will implement caching and load-spreading soon.
+
+Tweets are downloaded using the Twitter v2 API. They can contain references to other tweets up to 1 level deep, for example
+if the tweet quotes another tweet, or if the tweet is a reply to another tweet. These references are also downloaded and converted into
+the following JSON and uploaded to Scholar:
+
+```json
+{
+  "id": "1874431128096096666",
+  "created_at": "2025-01-01T12:23:00.000Z",
+  "username": "elonmusk",
+  "author_id": "",
+  "text": "The only pending behemoth is @sporedotfun. Nothing even close is being done.",
+  "quoted_tweets": [
+    {
+      "id": "1874159800566825026",
+      "created_at": "2024-12-31T18:24:51.000Z",
+      "username": "",
+      "author_id": "223921570",
+      "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ",
+    }
+  ],
+  "replied_tweets": null
+}
+```
