@@ -61,3 +61,16 @@ the following JSON and uploaded to Scholar:
   "replied_tweets": null
 }
 ```
+
+## Features
+
+#### Content
+- [x] Upload & summarize PDFs
+- [x] Upload & summarize tweets
+- [ ] Upload & summarize articles (web pages)
+
+#### Slack Integration
+- [x] Scholar commands
+- [ ] Interactivity with messages
+- [ ] Per-thread context
+- [ ] User context
