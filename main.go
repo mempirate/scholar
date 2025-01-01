@@ -112,7 +112,7 @@ func main() {
 			}
 
 			if cmd.CommandType == slack.SummarizeCommand {
-				summary, err := backend.Prompt(ctx, threadID, fmt.Sprintf("Please provide a summary of this file: %s. In case of a tweet, be careful about retrieving the correct file, with the exact same name. In case of a PDF, always mention the title of the paper instead of the name. Only use a single reference per unique file.", content.Name))
+				summary, err := backend.Prompt(ctx, threadID, createSummaryPrompt(content.Name))
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to prompt for summary")
 					continue
