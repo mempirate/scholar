@@ -1,16 +1,15 @@
 package util
 
 import (
-	"bufio"
-	"bytes"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
-	"strings"
+
+	"github.com/pkg/errors"
 )
 
 const KiB = 1024
@@ -29,22 +28,30 @@ func FormatBytes(bytes int64) string {
 	}
 }
 
-// DownloadPDF downloads a PDF from a URL and returns the path to the downloaded file.
-func DownloadPDF(url *url.URL) (name string, body []byte, err error) {
-	// By default, fileName is the last part of the URL path.
-	fileName := url.Path[strings.LastIndex(url.Path, "/")+1:]
-
-	// If there is no path, set filename to the host
-	if fileName == "" {
-		host := strings.TrimPrefix(url.Host, "www.")
-		fileName = strings.ReplaceAll(host, ".", "-")
+// DownloadContent downloads the content from a URL and returns it, with the content type.
+// The content type is determined by the Content-Type header of the response.
+func DownloadContent(url *url.URL) (body []byte, ct string, err error) {
+	resp, err := http.Get(url.String())
+	if err != nil {
+		return nil, "", errors.Wrap(err, "failed to download file")
 	}
 
-	if !strings.HasSuffix(fileName, ".pdf") {
-		fileName += ".pdf"
+	defer resp.Body.Close()
+
+	ct, _, err = mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil {
+		return nil, "", errors.Wrap(err, "failed to parse content type")
 	}
 
-	// Get the data
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", errors.Wrap(err, "failed to read file")
+	}
+
+	return
+}
+
+func DownloadWebPage(url *url.URL) (name string, body []byte, err error) {
 	resp, err := http.Get(url.String())
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to download file: %w", err)
@@ -52,29 +59,12 @@ func DownloadPDF(url *url.URL) (name string, body []byte, err error) {
 
 	defer resp.Body.Close()
 
-	ct := resp.Header.Get("Content-Type")
-	if ct == "" && ct != "application/pdf" {
-		return "", nil, fmt.Errorf("invalid content-type: %s", ct)
-	}
-
-	reader := bufio.NewReader(resp.Body)
-
-	const pdfMagicNumber = "%PDF-"
-	buf, err := reader.Peek(len(pdfMagicNumber))
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to read file header: %w", err)
-	}
-
-	if !bytes.Equal(buf, []byte(pdfMagicNumber)) {
-		return "", nil, errors.New("invalid magic")
-	}
-
-	content, err := io.ReadAll(reader)
+	content, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	return fileName, content, nil
+	return url.Host, content, nil
 }
 
 // generateRandomString creates a random string of the specified length in base64.

@@ -1,6 +1,11 @@
 package content
 
-import "testing"
+import (
+	"fmt"
+	"net/url"
+	"os"
+	"testing"
+)
 
 func TestRegexID(t *testing.T) {
 	h := NewContentHandler()
@@ -21,4 +26,28 @@ func TestRegexID(t *testing.T) {
 			t.Errorf("unexpected id: %s", id)
 		}
 	}
+}
+
+func TestHandleWebPage(t *testing.T) {
+	h := NewContentHandler()
+
+	link := "https://collective.flashbots.net/t/the-role-of-relays-in-reorgs/4247"
+	// t := "https://ethresear.ch/t/fork-choice-enforced-inclusion-lists-focil-a-simple-committee-based-inclusion-list-proposal/19870"
+
+	uri, err := url.Parse(link)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	content, err := h.HandleURL(uri)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if content.Type != TypeArticle {
+		t.Errorf("unexpected type: %s", content.Type)
+	}
+
+	fmt.Println(content.Name)
+
+	os.WriteFile(content.Name, content.Content, 0644)
 }
