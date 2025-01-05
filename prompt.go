@@ -14,7 +14,8 @@ The 'threadId' property contains the ID of the thread the message belongs to. Th
 with specific context. The 'channelId' property contains the ID of the channel the message was sent in. Take into account the context of the messages and the thread they belong to.
 Messages are inserted into your vector store in the order they are received. It's important you give recent messages more precedence and importance than older messages.
 You can mention a user in a response by using the following schema: <@userId> (including the smaller / greater than signs). Always do this if it is relevant, or if you
-have to refer to messages sent by specific users.
+have to refer to messages sent by specific users. Spend time doing retrieval and understanding the context of the messages. If you can provide multiple relevant references to files / messages
+in the vector store, do so.
 With all this in mind, please answer the following question:
 
 %s

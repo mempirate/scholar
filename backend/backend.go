@@ -366,11 +366,13 @@ func (b *Backend) Prompt(ctx context.Context, threadID, text string) (string, er
 		}
 
 		response.WriteString(content.Text.Value)
-		response.WriteByte('\n')
-		response.WriteByte('\n')
-		response.WriteString("---")
-		response.WriteByte('\n')
-		response.WriteString(strings.Join(citations, "\n"))
+		if len(citations) > 0 {
+			response.WriteByte('\n')
+			response.WriteByte('\n')
+			response.WriteString("---")
+			response.WriteByte('\n')
+			response.WriteString(strings.Join(citations, "\n"))
+		}
 
 		return response.String(), nil
 	} else {
