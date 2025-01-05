@@ -304,8 +304,6 @@ func (b *Backend) ContainsThread(threadID string) bool {
 	return ok
 }
 
-func (b *Backend) ContainsRemoteThread(ctx context.Context)
-
 func (b *Backend) Post(ctx context.Context, threadID, text string) error {
 	// TODO
 	return nil

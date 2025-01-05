@@ -143,6 +143,15 @@ func main() {
 		case event := <-events:
 			switch event.Type {
 			case slack.MessageEvent:
+				// TODO:
+				// Upload messages to the assistant context as JSON objects:
+				// {
+				//  "type": "message",
+				// 	"channelId": "C01B2PZQX1Z",
+				// 	"threadId": "1635732824.000100",
+				//  "userId": "U01B2PZQX1Z",
+				//  "text": "Hello, world!"
+				// }
 			case slack.MentionEvent:
 				if event.ThreadID != "" {
 					reply, err := backend.Prompt(ctx, event.ThreadID, createMentionPrompt(event.Text, event.ChannelID, event.ThreadID, event.UserID))
