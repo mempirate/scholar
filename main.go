@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/mempirate/scholar/backend"
@@ -52,25 +51,6 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to initialize backend")
 	}
 	log.Info().Msg("Backend initialized")
-
-	globalThreadFile := path.Join(dataDir, "global-thread.txt")
-
-	b, err := os.ReadFile(globalThreadFile)
-	globalThread := string(b)
-	if err != nil {
-		if os.IsNotExist(err) {
-			globalThread, err = backend.CreateGlobalThread(ctx)
-			if err := os.WriteFile(globalThreadFile, []byte(globalThread), 0644); err != nil {
-				log.Fatal().Str("thread_id", globalThread).Err(err).Msg("Failed to write global thread file")
-			}
-		} else {
-			log.Fatal().Err(err).Msg("Failed to read global thread file")
-		}
-	} else {
-		backend.LoadGlobalThread(ctx, globalThread)
-	}
-
-	log.Info().Str("thread_id", globalThread).Msg("Using global thread")
 
 	slackHandler := slack.NewSlackHandler(appToken, botToken)
 	commands := slackHandler.SubscribeCommands()
@@ -155,32 +135,18 @@ func main() {
 				//  "text": "Hello, world!"
 				// }
 			case slack.MentionEvent:
-				if event.ThreadID != "" {
-					reply, err := backend.Prompt(ctx, event.ThreadID, createMentionPrompt(event.Text, event.ChannelID, event.ThreadID, event.UserID))
-					if err != nil {
-						log.Error().Err(err).Msg("Failed to prompt assistant")
-						slackHandler.PostEphemeral(event.ChannelID, event.UserID, err.Error())
-						continue
-					}
-
-					if err := slackHandler.PostMessage(event.ChannelID, &event.ThreadID, reply); err != nil {
-						log.Error().Err(err).Msg("Failed to post message")
-						continue
-					}
-				} else {
-					// Work with the global thread
-					reply, err := backend.Prompt(ctx, "global", event.Text)
-					if err != nil {
-						log.Error().Err(err).Msg("Failed to prompt assistant")
-						slackHandler.PostEphemeral(event.ChannelID, event.UserID, err.Error())
-						continue
-					}
-
-					if err := slackHandler.PostMessage(event.ChannelID, &event.ThreadID, reply); err != nil {
-						log.Error().Err(err).Msg("Failed to post message")
-						continue
-					}
+				reply, err := backend.Prompt(ctx, event.ThreadID, createMentionPrompt(event.Text, event.ChannelID, event.ThreadID, event.UserID))
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to prompt assistant")
+					slackHandler.PostEphemeral(event.ChannelID, event.UserID, err.Error())
+					continue
 				}
+
+				if err := slackHandler.PostMessage(event.ChannelID, &event.ThreadID, reply); err != nil {
+					log.Error().Err(err).Msg("Failed to post message")
+					continue
+				}
+
 			}
 		}
 	}

@@ -261,7 +261,7 @@ func (s *SlackHandler) onMessage(event *slackevents.MessageEvent) error {
 func (s *SlackHandler) onAppMention(event *slackevents.AppMentionEvent) error {
 	s.log.Info().Str("thread_id", event.ThreadTimeStamp).Str("user", event.User).Msg("Received mention event")
 
-	var threadID string
+	threadID := event.TimeStamp
 	if event.ThreadTimeStamp != "" {
 		threadID = event.ThreadTimeStamp
 	}
