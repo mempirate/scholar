@@ -66,6 +66,8 @@ func main() {
 		} else {
 			log.Fatal().Err(err).Msg("Failed to read global thread file")
 		}
+	} else {
+		backend.LoadGlobalThread(ctx, globalThread)
 	}
 
 	log.Info().Str("thread_id", globalThread).Msg("Using global thread")

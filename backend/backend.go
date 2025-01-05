@@ -304,6 +304,16 @@ func (b *Backend) ContainsThread(threadID string) bool {
 	return ok
 }
 
+func (b *Backend) LoadGlobalThread(ctx context.Context, threadID string) error {
+	thread, err := b.client.Beta.Threads.Get(ctx, threadID)
+	if err != nil {
+		return err
+	}
+
+	b.threadCache["global"] = thread
+	return nil
+}
+
 func (b *Backend) Post(ctx context.Context, threadID, text string) error {
 	// TODO
 	return nil
