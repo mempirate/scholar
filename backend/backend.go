@@ -266,6 +266,22 @@ func (b *Backend) getFileName(ctx context.Context, id string) (string, error) {
 	return f.Filename, nil
 }
 
+func (b *Backend) CreateGlobalThread(ctx context.Context) (string, error) {
+	if b.ContainsThread("global") {
+		return "", nil
+	}
+
+	thread, err := b.client.Beta.Threads.New(ctx, openai.BetaThreadNewParams{})
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create thread")
+	}
+
+	b.log.Debug().Str("openai_id", thread.ID).Msg("global thread created")
+
+	b.threadCache["global"] = thread
+	return thread.ID, nil
+}
+
 // CreateThread creates a new thread with the given ID if it doesn't exist yet.
 func (b *Backend) CreateThread(ctx context.Context, threadID string) error {
 	if b.ContainsThread(threadID) {
@@ -287,6 +303,8 @@ func (b *Backend) ContainsThread(threadID string) bool {
 	_, ok := b.threadCache[threadID]
 	return ok
 }
+
+func (b *Backend) ContainsRemoteThread(ctx context.Context)
 
 func (b *Backend) Post(ctx context.Context, threadID, text string) error {
 	// TODO

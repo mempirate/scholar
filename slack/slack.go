@@ -29,11 +29,28 @@ const (
 	SummarizeCommand SlashCommand = "/summary"
 )
 
+// Command represents a processed command from Slack.
 type Command struct {
 	CommandType SlashCommand
 	UserID      string
 	ChannelID   string
 	URL         *url.URL
+}
+
+type EventType = string
+
+const (
+	MessageEvent EventType = "message"
+	MentionEvent EventType = "mention"
+)
+
+// Event represents a processed event from Slack.
+type Event struct {
+	Type      EventType
+	UserID    string
+	ChannelID string
+	ThreadID  string
+	Text      string
 }
 
 type SlackHandler struct {
@@ -43,6 +60,7 @@ type SlackHandler struct {
 	urlRegex *regexp.Regexp
 
 	commandCh chan Command
+	eventCh   chan Event
 
 	// TODO: limit this map
 	processingCache map[string]struct{}
@@ -60,6 +78,7 @@ func NewSlackHandler(appToken, botToken string) *SlackHandler {
 		processingCache: make(map[string]struct{}),
 
 		commandCh: make(chan Command, 32),
+		eventCh:   make(chan Event, 32),
 	}
 }
 
@@ -113,6 +132,11 @@ func (s *SlackHandler) Start() {
 // SubscribeCommands returns a channel that yields incoming commands.
 func (s *SlackHandler) SubscribeCommands() chan Command {
 	return s.commandCh
+}
+
+// SubscribeEvents returns a channel that yields incoming events.
+func (s *SlackHandler) SubscribeEvents() chan Event {
+	return s.eventCh
 }
 
 // StartUploadThread starts a new thread in the given channel with the given text, and returns the thread ID.
@@ -215,77 +239,40 @@ func (s *SlackHandler) onEvent(event slackevents.EventsAPIEvent) error {
 	return nil
 }
 
-func (s *SlackHandler) onAppMention(event *slackevents.AppMentionEvent) error {
-	_ = event
-	// TODO: check if this is a message inside a thread, or a thread starter!
-	// Thread ID is determined by the timestamp
-	// threadID := event.TimeStamp
+func (s *SlackHandler) onMessage(event *slackevents.MessageEvent) error {
+	s.log.Info().Str("thread_id", event.ThreadTimeStamp).Str("user", event.User).Msg("Received message event")
 
-	// // Check if we're already processing this thread
-	// if _, ok := s.processingCache[threadID]; ok {
-	// 	return nil
-	// }
+	var threadID string
+	if event.ThreadTimeStamp != "" {
+		threadID = event.ThreadTimeStamp
+	}
 
-	// // Else add to cache
-	// s.processingCache[threadID] = struct{}{}
-
-	// // Extract all URLs
-	// urlStr := s.urlRegex.FindString(event.Text)
-
-	// if urlStr == "" {
-	// 	s.log.Debug().Str("text", event.Text).Msg("Ignoring event without URL")
-	// 	s.client.PostMessage(event.Channel, slack.MsgOptionText(ReplyMissingURL, false), slack.MsgOptionTS(threadID))
-	// 	return nil
-	// }
-
-	// url, err := url.Parse(urlStr)
-	// if err != nil {
-	// 	s.log.Error().Err(err).Str("url", urlStr).Msg("Failed to parse URL")
-	// 	s.client.PostMessage(event.Channel, slack.MsgOptionText(ReplyInvalidURL, false), slack.MsgOptionTS(threadID))
-	// 	return nil
-	// }
-
-	// s.log.Info().Str("url", urlStr).Str("ts", threadID).Msg("New URL received, starting upload...")
-
-	// path, err := util.DownloadPDF(url)
-	// if err != nil {
-	// 	s.log.Error().Err(err).Str("url", urlStr).Msg("Failed to download PDF")
-	// 	// TODO: See if error is retryable or user-facing, and respond accordingly
-	// 	s.client.PostMessage(event.Channel, slack.MsgOptionText(fmt.Sprintf("%s (error: %s)", ReplyDownloadFailed, err), false), slack.MsgOptionTS(threadID))
-	// 	return nil
-	// }
-
-	// ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	// defer cancel()
-	// s.backend.CreateThread(ctx, threadID)
-
-	// ctx, cancel = context.WithTimeout(context.Background(), 60*time.Second)
-	// defer cancel()
-
-	// if err := s.backend.UploadFile(ctx, threadID, path); err != nil {
-	// 	s.log.Error().Err(err).Msg("Failed to upload file")
-	// 	// This should def be retried
-	// 	return err
-	// }
-
-	// s.log.Debug().Str("url", urlStr).Msg("PDF uploaded successfully, prompting for summary...")
-
-	// summary, err := s.backend.Prompt(ctx, threadID, fmt.Sprintf("Please provide a summary of this file: %s. Disregard the path. Always mention the title of the paper, not the file name. Only use a single reference per unique file.", path))
-	// if err != nil {
-	// 	s.log.Error().Err(err).Msg("Failed to prompt for summary")
-	// 	return err
-	// }
-
-	// // TODO: error handling (also wrap this in func)
-	// s.client.PostMessage(event.Channel, slack.MsgOptionText(summary, true), slack.MsgOptionTS(threadID), slack.MsgOptionPostMessageParameters(slack.PostMessageParameters{
-	// 	Markdown: true,
-	// }))
+	s.eventCh <- Event{
+		Type:      MessageEvent,
+		UserID:    event.User,
+		ChannelID: event.Channel,
+		ThreadID:  threadID,
+		Text:      event.Text,
+	}
 
 	return nil
 }
 
-func (s *SlackHandler) onMessage(event *slackevents.MessageEvent) error {
-	s.log.Info().Str("text", event.Text).Msg("Received message event")
+func (s *SlackHandler) onAppMention(event *slackevents.AppMentionEvent) error {
+	s.log.Info().Str("thread_id", event.ThreadTimeStamp).Str("user", event.User).Msg("Received mention event")
+
+	var threadID string
+	if event.ThreadTimeStamp != "" {
+		threadID = event.ThreadTimeStamp
+	}
+
+	s.eventCh <- Event{
+		Type:      MentionEvent,
+		UserID:    event.User,
+		ChannelID: event.Channel,
+		ThreadID:  threadID,
+		Text:      event.Text,
+	}
 
 	return nil
 }
