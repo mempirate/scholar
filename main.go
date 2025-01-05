@@ -167,7 +167,7 @@ func main() {
 					}
 				} else {
 					// Work with the global thread
-					reply, err := backend.Prompt(ctx, globalThread, event.Text)
+					reply, err := backend.Prompt(ctx, "global", event.Text)
 					if err != nil {
 						log.Error().Err(err).Msg("Failed to prompt assistant")
 						slackHandler.PostEphemeral(event.ChannelID, event.UserID, err.Error())
