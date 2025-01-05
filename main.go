@@ -129,9 +129,10 @@ func main() {
 				// Upload messages to the assistant context as JSON objects:
 				// {
 				//  "type": "message",
+				//  "messageId": "1635732824.000100", // To refer to messages later
 				// 	"channelId": "C01B2PZQX1Z",
 				// 	"threadId": "1635732824.000100",
-				//  "userId": "U01B2PZQX1Z",
+				//  "userId": "U01B2PZQX1Z", // To refer to users. Does this need username as well?
 				//  "text": "Hello, world!"
 				// }
 			case slack.MentionEvent:

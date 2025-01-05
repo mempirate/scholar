@@ -25,8 +25,9 @@ The Slack integration currently works with 2 commands:
 Scholar supports the following content types:
 - PDFs
 - Tweets
+- Web pages
 
-With plans to support more in the future (like regular articles).
+With plans to support more in the future (like Github repositories).
 
 ### PDFs
 PDFs are currently downloaded from the link, verified to be a PDF, and then uploaded to the vector store as is. This
@@ -62,15 +63,20 @@ the following JSON and uploaded to Scholar:
 }
 ```
 
+### Web Pages
+Web pages are downloaded and converted to Markdown with [`html-to-markdown`](https://github.com/JohannesKaufmann/html-to-markdown).
+
 ## Features
 
 #### Content
 - [x] Upload & summarize PDFs
 - [x] Upload & summarize tweets
-- [ ] Upload & summarize articles (web pages)
+- [x] Upload & summarize articles (web pages)
+- [ ] Github repositories
 
 #### Slack Integration
 - [x] Scholar commands
-- [ ] Interactivity with messages
+- [x] Interactivity with mentions
+- [ ] Saving messages to the vector store
 - [ ] Per-thread context
 - [ ] User context
