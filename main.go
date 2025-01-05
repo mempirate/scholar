@@ -135,6 +135,13 @@ func main() {
 				//  "text": "Hello, world!"
 				// }
 			case slack.MentionEvent:
+				err := backend.CreateThread(ctx, event.ThreadID)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to create thread")
+					slackHandler.PostEphemeral(event.ChannelID, event.UserID, err.Error())
+					continue
+				}
+
 				reply, err := backend.Prompt(ctx, event.ThreadID, createMentionPrompt(event.Text, event.ChannelID, event.ThreadID, event.UserID))
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to prompt assistant")
