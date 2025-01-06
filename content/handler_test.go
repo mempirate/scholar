@@ -31,7 +31,8 @@ func TestRegexID(t *testing.T) {
 func TestHandleWebPage(t *testing.T) {
 	h := NewContentHandler()
 
-	link := "https://collective.flashbots.net/t/the-role-of-relays-in-reorgs/4247"
+	// link := "https://collective.flashbots.net/t/the-role-of-relays-in-reorgs/4247"
+	link := "https://vitalik.eth.limo/general/2025/01/05/dacc2.html"
 	// t := "https://ethresear.ch/t/fork-choice-enforced-inclusion-lists-focil-a-simple-committee-based-inclusion-list-proposal/19870"
 
 	uri, err := url.Parse(link)

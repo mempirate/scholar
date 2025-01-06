@@ -181,11 +181,18 @@ func extractTitle(n *html.Node) (string, bool) {
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		result, ok := extractTitle(c)
 		if ok {
-			return result, ok
+			return sanitizeFileName(result), ok
 		}
 	}
 
 	return "", false
+}
+
+func sanitizeFileName(name string) string {
+	re := regexp.MustCompile(`[\/\\:\*\?"<>\|\p{C}]`)
+
+	name = re.ReplaceAllString(name, "-")
+	return strings.Trim(name, " .")
 }
 
 func reverseArray(arr []string) {
