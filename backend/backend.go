@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/mempirate/scholar/cache"
 	"github.com/mempirate/scholar/log"
 	"github.com/mempirate/scholar/store"
 	"github.com/mempirate/scholar/util"
@@ -48,7 +50,7 @@ type Backend struct {
 	localStore store.LocalStore
 
 	// threadCache is a cache that maps local IDs to openAI thread IDs.
-	threadCache map[string]*openai.Thread
+	threadCache *cache.BoltCache
 }
 
 func NewBackend(apiKey string, model openai.ChatModel, localStore store.LocalStore) *Backend {
@@ -60,11 +62,17 @@ func NewBackend(apiKey string, model openai.ChatModel, localStore store.LocalSto
 		option.WithHeader("OpenAI-Beta", "assistants=v2"),
 	)
 
+	cache, err := cache.NewBoltCache(path.Join(localStore.Path(), "threads.db"))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create thread cache")
+		return nil
+	}
+
 	return &Backend{
 		log:         log,
 		client:      client,
 		model:       model,
-		threadCache: make(map[string]*openai.Thread),
+		threadCache: cache,
 		localStore:  localStore,
 	}
 }
@@ -279,13 +287,12 @@ func (b *Backend) CreateThread(ctx context.Context, threadID string) error {
 
 	b.log.Debug().Str("thread_id", threadID).Str("openai_id", thread.ID).Msg("Thread created")
 
-	b.threadCache[threadID] = thread
+	b.threadCache.Put(threadID, thread.ID)
 	return nil
 }
 
 func (b *Backend) ContainsThread(threadID string) bool {
-	_, ok := b.threadCache[threadID]
-	return ok
+	return b.threadCache.Contains(threadID)
 }
 
 func (b *Backend) Post(ctx context.Context, threadID, text string) error {
@@ -299,12 +306,12 @@ func (b *Backend) Prompt(ctx context.Context, threadID, text string) (string, er
 		b.log.Debug().Dur("duration", time.Since(start)).Msg("Message posted")
 	}()
 
-	thread, ok := b.threadCache[threadID]
+	thread, ok := b.threadCache.Get(threadID)
 	if !ok {
 		return "", errors.New("local thread not found")
 	}
 
-	_, err := b.client.Beta.Threads.Messages.New(ctx, thread.ID, openai.BetaThreadMessageNewParams{
+	_, err := b.client.Beta.Threads.Messages.New(ctx, thread, openai.BetaThreadMessageNewParams{
 		Role: openai.F(openai.BetaThreadMessageNewParamsRoleUser),
 		Content: openai.F([]openai.MessageContentPartParamUnion{
 			openai.TextContentBlockParam{
@@ -318,7 +325,7 @@ func (b *Backend) Prompt(ctx context.Context, threadID, text string) (string, er
 		return "", errors.Wrap(err, "failed to create new message")
 	}
 
-	run, err := b.client.Beta.Threads.Runs.NewAndPoll(ctx, thread.ID, openai.BetaThreadRunNewParams{
+	run, err := b.client.Beta.Threads.Runs.NewAndPoll(ctx, thread, openai.BetaThreadRunNewParams{
 		AssistantID: openai.String(b.assistant.ID),
 		// TODO: add in config
 		Instructions: openai.String("You are a scholarly assistant helping in summarizing articles, papers, and other documents. Use your vector store to respond to questions. Be concise to reduce token usage."),
@@ -333,7 +340,7 @@ func (b *Backend) Prompt(ctx context.Context, threadID, text string) (string, er
 	response := strings.Builder{}
 
 	if run.Status == openai.RunStatusCompleted {
-		messages, err := b.client.Beta.Threads.Messages.List(ctx, thread.ID, openai.BetaThreadMessageListParams{})
+		messages, err := b.client.Beta.Threads.Messages.List(ctx, thread, openai.BetaThreadMessageListParams{})
 
 		if err != nil {
 			panic(err.Error())

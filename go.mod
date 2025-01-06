@@ -8,6 +8,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.33.0
 	github.com/slack-go/slack v0.15.0
+	go.etcd.io/bbolt v1.3.11
 	golang.org/x/net v0.33.0
 	golang.org/x/sync v0.10.0
 )

@@ -7,6 +7,7 @@ import (
 )
 
 type LocalStore interface {
+	Path() string
 	// List returns a list of all files in the store.
 	List() ([]string, error)
 
@@ -70,4 +71,8 @@ func (fs *FileStore) Store(name string, content io.Reader) error {
 func (fs *FileStore) Get(name string) (io.ReadCloser, error) {
 	filePath := filepath.Join(fs.dataDir, name)
 	return os.Open(filePath)
+}
+
+func (fs *FileStore) Path() string {
+	return fs.dataDir
 }
