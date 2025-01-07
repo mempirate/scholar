@@ -143,6 +143,8 @@ func main() {
 					continue
 				}
 
+				log.Info().Str("user_id", event.UserID).Str("channel_id", event.ChannelID).Str("thread_id", event.ThreadID).Msg("New mention")
+
 				reply, err := backend.Prompt(ctx, event.ThreadID, createMentionPrompt(event.Text, event.ChannelID, event.ThreadID, event.UserID))
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to prompt assistant")
