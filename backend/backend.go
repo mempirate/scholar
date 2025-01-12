@@ -336,8 +336,9 @@ func (b *Backend) Prompt(ctx context.Context, threadID, instructions, text strin
 		Instructions: openai.String(instructions),
 		// NOTE: with file search, we should increase the max prompt tokens for better responses.
 		// Ref: <https://platform.openai.com/docs/assistants/deep-dive#max-completion-and-max-prompt-tokens>
-		MaxPromptTokens: openai.Int(100_000),
-		Include:         openai.F([]openai.RunStepInclude{openai.RunStepIncludeStepDetailsToolCallsFileSearchResultsContent}),
+		MaxPromptTokens:     openai.Int(100_000),
+		MaxCompletionTokens: openai.Int(30_000),
+		Include:             openai.F([]openai.RunStepInclude{openai.RunStepIncludeStepDetailsToolCallsFileSearchResultsContent}),
 	}, 100)
 
 	if err != nil {
