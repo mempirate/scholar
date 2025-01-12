@@ -189,13 +189,17 @@ func (b *Backend) GetOrCreateAssistant(ctx context.Context) (*openai.Assistant, 
 
 	assistant, err := b.client.Beta.Assistants.New(ctx, openai.BetaAssistantNewParams{
 		Name:         openai.String(ASSISTANT_NAME),
-		Instructions: openai.String("You are a scholarly assistant helping in summarizing articles, papers, and other documents."),
+		Instructions: openai.String("You are a scholarly RAG assistant helping in summarizing articles, papers, and other documents."),
 		Model:        openai.String(b.model),
 		// Description:   param.Field{},
 		// Metadata:      param.Field{},
 		// Temperature:   param.Field{},
 		Tools: openai.F([]openai.AssistantToolUnionParam{
-			openai.FileSearchToolParam{Type: openai.F(openai.FileSearchToolTypeFileSearch)},
+			openai.FileSearchToolParam{Type: openai.F(openai.FileSearchToolTypeFileSearch), FileSearch: openai.F(openai.FileSearchToolFileSearchParam{
+				// NOTE: set max num results to 50 for now (maximum)
+				// Ref. <https://platform.openai.com/docs/assistants/tools/file-search#customizing-file-search-settings>
+				MaxNumResults: openai.Int(50),
+			})},
 		}),
 		// TopP:          param.Field{},
 	})
@@ -329,6 +333,10 @@ func (b *Backend) Prompt(ctx context.Context, threadID, instructions, text strin
 		AssistantID: openai.String(b.assistant.ID),
 		// TODO: add in config
 		Instructions: openai.String(instructions),
+		// NOTE: with file search, we should increase the max prompt tokens for better responses.
+		// Ref: <https://platform.openai.com/docs/assistants/deep-dive#max-completion-and-max-prompt-tokens>
+		MaxPromptTokens: openai.Int(100_000),
+		Include:         openai.F([]openai.RunStepInclude{openai.RunStepIncludeStepDetailsToolCallsFileSearchResultsContent}),
 	}, 100)
 
 	if err != nil {
