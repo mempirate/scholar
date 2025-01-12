@@ -300,7 +300,7 @@ func (b *Backend) Post(ctx context.Context, threadID, text string) error {
 	return nil
 }
 
-func (b *Backend) Prompt(ctx context.Context, threadID, text string) (string, error) {
+func (b *Backend) Prompt(ctx context.Context, threadID, instructions, text string) (string, error) {
 	start := time.Now()
 	defer func() {
 		b.log.Debug().Dur("duration", time.Since(start)).Msg("Message posted")
@@ -328,7 +328,7 @@ func (b *Backend) Prompt(ctx context.Context, threadID, text string) (string, er
 	run, err := b.client.Beta.Threads.Runs.NewAndPoll(ctx, thread, openai.BetaThreadRunNewParams{
 		AssistantID: openai.String(b.assistant.ID),
 		// TODO: add in config
-		Instructions: openai.String("You are a scholarly assistant helping in summarizing articles, papers, and other documents. Use your vector store to respond to questions. Be concise to reduce token usage."),
+		Instructions: openai.String(instructions),
 	}, 100)
 
 	if err != nil {

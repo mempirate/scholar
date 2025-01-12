@@ -11,6 +11,7 @@ import (
 	"github.com/mempirate/scholar/backend"
 	"github.com/mempirate/scholar/content"
 	"github.com/mempirate/scholar/log"
+	"github.com/mempirate/scholar/prompt"
 	"github.com/mempirate/scholar/slack"
 	"github.com/mempirate/scholar/store"
 	"github.com/openai/openai-go"
@@ -111,7 +112,7 @@ func main() {
 			}
 
 			if cmd.CommandType == slack.SummarizeCommand {
-				summary, err := backend.Prompt(ctx, threadID, createSummaryPrompt(content.Name))
+				summary, err := backend.Prompt(ctx, threadID, prompt.SUMMARY_PROMPT_INSTRUCTIONS, prompt.CreateSummaryPrompt(content.Name))
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to prompt for summary")
 					continue
@@ -145,7 +146,7 @@ func main() {
 
 				log.Info().Str("user_id", event.UserID).Str("channel_id", event.ChannelID).Str("thread_id", event.ThreadID).Msg("New mention")
 
-				reply, err := backend.Prompt(ctx, event.ThreadID, createMentionPrompt(event.Text, event.ChannelID, event.ThreadID, event.UserID))
+				reply, err := backend.Prompt(ctx, event.ThreadID, prompt.MENTION_PROMPT_INSTRUCTIONS, prompt.CreateMentionPrompt(event.Text, event.ChannelID, event.ThreadID, event.UserID))
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to prompt assistant")
 					slackHandler.PostEphemeral(event.ChannelID, event.UserID, err.Error())
