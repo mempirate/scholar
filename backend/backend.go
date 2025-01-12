@@ -10,6 +10,7 @@ import (
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/packages/pagination"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
@@ -348,10 +349,29 @@ func (b *Backend) Prompt(ctx context.Context, threadID, instructions, text strin
 	response := strings.Builder{}
 
 	if run.Status == openai.RunStatusCompleted {
-		messages, err := b.client.Beta.Threads.Messages.List(ctx, thread, openai.BetaThreadMessageListParams{})
+		eg := errgroup.Group{}
 
-		if err != nil {
-			panic(err.Error())
+		var messages *pagination.CursorPage[openai.Message]
+		var steps *pagination.CursorPage[openai.RunStep]
+
+		eg.Go(func() error {
+			messages, err = b.client.Beta.Threads.Messages.List(ctx, thread, openai.BetaThreadMessageListParams{})
+			if err != nil {
+				return err
+			}
+
+			steps, err = b.client.Beta.Threads.Runs.Steps.List(ctx, thread, run.ID, openai.BetaThreadRunStepListParams{
+				Include: openai.F([]openai.RunStepInclude{openai.RunStepIncludeStepDetailsToolCallsFileSearchResultsContent}),
+			})
+			if err != nil {
+				return err
+			}
+
+			return nil
+		})
+
+		if err := eg.Wait(); err != nil {
+			return "", err
 		}
 
 		// The first message is the response
@@ -387,6 +407,16 @@ func (b *Backend) Prompt(ctx context.Context, threadID, instructions, text strin
 			response.WriteString("---")
 			response.WriteByte('\n')
 			response.WriteString(strings.Join(citations, "\n"))
+		}
+
+		response.WriteByte('\n')
+		response.WriteByte('\n')
+		response.WriteString("---")
+		response.WriteByte('\n')
+		response.WriteString("Tool calls:")
+
+		for _, step := range steps.Data {
+			response.WriteString(fmt.Sprint("-", step.StepDetails.JSON.ToolCalls.Raw()))
 		}
 
 		return response.String(), nil
