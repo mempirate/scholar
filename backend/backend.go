@@ -417,6 +417,10 @@ func (b *Backend) Prompt(ctx context.Context, threadID, instructions, text strin
 		response.WriteString("Additional files consulted:")
 
 		for _, step := range steps.Data {
+			if step.StepDetails.ToolCalls == nil {
+				continue
+			}
+
 			for _, toolCall := range step.StepDetails.ToolCalls.([]openai.ToolCall) {
 				if toolCall.Type == openai.ToolCallType(openai.FileSearchToolTypeFileSearch) && toolCall.FileSearch != nil {
 					response.WriteByte('\n')
