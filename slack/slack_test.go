@@ -6,9 +6,17 @@ import (
 )
 
 func TestRegex(t *testing.T) {
-	// Test the URL regex
+	tests := []string{
+		"https://example.com",
+		"https://layerzero.network/publications/QMDB_13Jan2025_v1.0.pdf",
+		"http://test.com/path_with_underscores",
+		"https://domain.com/file-name_123.pdf",
+	}
+
 	regex := regexp.MustCompile(URL_REGEX)
-	if !regex.MatchString("https://example.com") {
-		t.Error("URL_REGEX failed to match a URL")
+	for _, url := range tests {
+		if !regex.MatchString(url) {
+			t.Errorf("URL_REGEX failed to match: %s", url)
+		}
 	}
 }

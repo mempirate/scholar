@@ -13,8 +13,8 @@ import (
 	"github.com/mempirate/scholar/log"
 )
 
-// https://stackoverflow.com/a/3809435
-const URL_REGEX = `https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)`
+// https://stackoverflow.com/a/3809435 + Claude
+const URL_REGEX = `https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}([-a-zA-Z0-9()@:%_\+.~#?&//=]*)`
 
 const (
 	ReplyMissingURL     = "There doesn't seem to be a URL in your message."
@@ -159,7 +159,7 @@ func (s *SlackHandler) PostEphemeral(channelID, userID, text string) error {
 func (s *SlackHandler) ExtractURL(text string) (*url.URL, error) {
 	urlStr := s.urlRegex.FindString(text)
 	if urlStr == "" {
-		return nil, fmt.Errorf("no URL found in text")
+		return nil, fmt.Errorf("no URL found in text: %s", text)
 	}
 
 	url, err := url.Parse(urlStr)
