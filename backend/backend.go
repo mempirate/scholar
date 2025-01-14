@@ -414,10 +414,17 @@ func (b *Backend) Prompt(ctx context.Context, threadID, instructions, text strin
 		response.WriteByte('\n')
 		response.WriteString("---")
 		response.WriteByte('\n')
-		response.WriteString("Tool calls:")
+		response.WriteString("Additional files consulted:")
 
 		for _, step := range steps.Data {
-			response.WriteString(fmt.Sprint("-", step.StepDetails.JSON.ToolCalls.Raw()))
+			for _, toolCall := range step.StepDetails.ToolCalls.([]openai.ToolCall) {
+				if toolCall.Type == openai.ToolCallType(openai.FileSearchToolTypeFileSearch) && toolCall.FileSearch != nil {
+					response.WriteByte('\n')
+					for _, result := range toolCall.FileSearch.(openai.FileSearchToolCallFileSearch).Results {
+						response.WriteString(fmt.Sprintf("  - File: %s, Score: %.2f", result.FileName, result.Score))
+					}
+				}
+			}
 		}
 
 		return response.String(), nil
