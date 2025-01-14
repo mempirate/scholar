@@ -353,7 +353,6 @@ func (b *Backend) Prompt(ctx context.Context, threadID, instructions, text strin
 		eg := errgroup.Group{}
 
 		var messages *pagination.CursorPage[openai.Message]
-		var steps *pagination.CursorPage[openai.RunStep]
 
 		eg.Go(func() error {
 			messages, err = b.client.Beta.Threads.Messages.List(ctx, thread, openai.BetaThreadMessageListParams{})
@@ -361,9 +360,10 @@ func (b *Backend) Prompt(ctx context.Context, threadID, instructions, text strin
 				return err
 			}
 
-			steps, err = b.client.Beta.Threads.Runs.Steps.List(ctx, thread, run.ID, openai.BetaThreadRunStepListParams{
-				Include: openai.F([]openai.RunStepInclude{openai.RunStepIncludeStepDetailsToolCallsFileSearchResultsContent}),
-			})
+			// TODO: include steps and files consulted
+			// steps, err = b.client.Beta.Threads.Runs.Steps.List(ctx, thread, run.ID, openai.BetaThreadRunStepListParams{
+			// 	Include: openai.F([]openai.RunStepInclude{openai.RunStepIncludeStepDetailsToolCallsFileSearchResultsContent}),
+			// })
 			if err != nil {
 				return err
 			}
@@ -408,27 +408,6 @@ func (b *Backend) Prompt(ctx context.Context, threadID, instructions, text strin
 			response.WriteString("---")
 			response.WriteByte('\n')
 			response.WriteString(strings.Join(citations, "\n"))
-		}
-
-		response.WriteByte('\n')
-		response.WriteByte('\n')
-		response.WriteString("---")
-		response.WriteByte('\n')
-		response.WriteString("Additional files consulted:")
-
-		for _, step := range steps.Data {
-			if step.StepDetails.ToolCalls == nil {
-				continue
-			}
-
-			for _, toolCall := range step.StepDetails.ToolCalls.([]openai.ToolCall) {
-				if toolCall.Type == openai.ToolCallType(openai.FileSearchToolTypeFileSearch) && toolCall.FileSearch != nil {
-					response.WriteByte('\n')
-					for _, result := range toolCall.FileSearch.(openai.FileSearchToolCallFileSearch).Results {
-						response.WriteString(fmt.Sprintf("  - File: %s, Score: %.2f", result.FileName, result.Score))
-					}
-				}
-			}
 		}
 
 		return response.String(), nil
