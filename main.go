@@ -72,6 +72,12 @@ func main() {
 				continue
 			}
 
+			if content == nil {
+				log.Info().Str("url", cmd.URL.String()).Msg("Nil content")
+				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, "Content type not supported")
+				continue
+			}
+
 			// We only de-duplicate uploads. If someone wants to summarize a file that already exists, we'll allow it, but we won't upload it again.
 			if cmd.CommandType == slack.UploadCommand {
 				// Handle content de-duplication
