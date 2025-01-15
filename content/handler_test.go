@@ -52,3 +52,36 @@ func TestHandleWebPage(t *testing.T) {
 
 	os.WriteFile(content.Name, content.Content, 0644)
 }
+
+func TestGithubMarkdown(t *testing.T) {
+	h := NewContentHandler()
+
+	urls := []string{
+		"https://github.com/opentimestamps/opentimestamps-server/blob/master/doc/merkle-mountain-range.md",
+		"https://github.com/opentimestamps/opentimestamps-server/blob/master/README.md",
+	}
+
+	names := []string{
+		"opentimestamps-server-merkle-mountain-range.md",
+		"opentimestamps-server-README.md",
+	}
+
+	for i, link := range urls {
+		uri, _ := url.Parse(link)
+
+		content, err := h.handleGithubMarkdown(uri)
+		if err != nil {
+			t.Error(err)
+		}
+
+		if content.Type != TypeArticle {
+			t.Errorf("unexpected type: %s", content.Type)
+		}
+
+		if content.Name != names[i] {
+			t.Errorf("unexpected name: %s", content.Name)
+		}
+
+		os.WriteFile(content.Name, content.Content, 0644)
+	}
+}

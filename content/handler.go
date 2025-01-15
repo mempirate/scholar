@@ -35,12 +35,15 @@ type Content struct {
 
 type ContentHandler struct {
 	twitterRegex *regexp.Regexp
+	githubRegex  *regexp.Regexp
 }
 
 func NewContentHandler() *ContentHandler {
 	twitterRegex := regexp.MustCompile(`(?i)https?://(www\.)?(twitter\.com|x\.com)/\w+/status/(\d+)`)
+	githubRegex := regexp.MustCompile(`^https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+\.md)$`)
 	return &ContentHandler{
 		twitterRegex: twitterRegex,
+		githubRegex:  githubRegex,
 	}
 }
 
@@ -70,6 +73,8 @@ func (h *ContentHandler) HandleURL(uri *url.URL) (*Content, error) {
 			Content: content,
 		}, nil
 
+	} else if h.githubRegex.MatchString(uri.String()) {
+		return h.handleGithubMarkdown(uri)
 	} else {
 		body, ct, err := util.DownloadContent(uri)
 		if err != nil {
@@ -156,6 +161,40 @@ func (h *ContentHandler) handleArticle(url *url.URL, body []byte) (*Content, err
 		Name:    fileName,
 		URL:     url,
 		Content: mdBody,
+	}, nil
+}
+
+func getRawGithubURL(url *url.URL) (*url.URL, error) {
+	// Replace the domain and remove the "/blob/" segment
+	rawURL := strings.Replace(url.String(), "github.com", "raw.githubusercontent.com", 1)
+	rawURL = strings.Replace(rawURL, "/blob/", "/", 1)
+
+	return url.Parse(rawURL)
+}
+
+func (h *ContentHandler) handleGithubMarkdown(url *url.URL) (*Content, error) {
+	fileName := url.Path[strings.LastIndex(url.Path, "/")+1:]
+	matches := h.githubRegex.FindStringSubmatch(url.String())
+	repo := matches[2]
+	rawUrl, err := getRawGithubURL(url)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get raw URL for %s", url)
+	}
+
+	body, ct, err := util.DownloadContent(rawUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	if ct != "text/plain" {
+		return nil, errors.New("invalid content type for GitHub markdown")
+	}
+
+	return &Content{
+		Type:    TypeArticle,
+		Name:    fmt.Sprintf("%s-%s", repo, fileName),
+		URL:     url,
+		Content: body,
 	}, nil
 }
 
