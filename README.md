@@ -26,6 +26,8 @@ Scholar supports the following content types:
 - PDFs
 - Tweets
 - Web pages
+  - Regular articles
+  - Github markdown files (READMEs, etc.)
 
 With plans to support more in the future (like Github repositories).
 
