@@ -196,6 +196,7 @@ func (b *Backend) GetOrCreateAssistant(ctx context.Context) (*openai.Assistant, 
 		// Description:   param.Field{},
 		// Metadata:      param.Field{},
 		// Temperature:   param.Field{},
+		Temperature: openai.Float(1),
 		Tools: openai.F([]openai.AssistantToolUnionParam{
 			openai.FileSearchToolParam{Type: openai.F(openai.FileSearchToolTypeFileSearch), FileSearch: openai.F(openai.FileSearchToolFileSearchParam{
 				// NOTE: set max num results to 50 for now (maximum)
@@ -417,8 +418,4 @@ func (b *Backend) Prompt(ctx context.Context, threadID, instructions, text strin
 		b.log.Error().Str("status", string(run.Status)).Str("data", run.JSON.RawJSON()).Msg("Run not completed")
 		return "", err
 	}
-}
-
-func isNotFoundError(err error) bool {
-	return strings.Contains(err.Error(), "404")
 }
