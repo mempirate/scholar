@@ -17,6 +17,7 @@ import (
 
 	"github.com/mempirate/scholar/cache"
 	"github.com/mempirate/scholar/log"
+	"github.com/mempirate/scholar/prompt"
 	"github.com/mempirate/scholar/store"
 	"github.com/mempirate/scholar/util"
 )
@@ -190,7 +191,7 @@ func (b *Backend) GetOrCreateAssistant(ctx context.Context) (*openai.Assistant, 
 
 	assistant, err := b.client.Beta.Assistants.New(ctx, openai.BetaAssistantNewParams{
 		Name:         openai.String(ASSISTANT_NAME),
-		Instructions: openai.String("You are a scholarly RAG assistant helping in summarizing articles, papers, and other documents."),
+		Instructions: openai.String(prompt.ASSISTANT_PROMPT_INSTRUCTIONS),
 		Model:        openai.String(b.model),
 		// Description:   param.Field{},
 		// Metadata:      param.Field{},
