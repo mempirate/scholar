@@ -100,25 +100,25 @@ func main() {
 				}
 			}
 
-			r := bytes.NewReader(content.Content)
-			if err := fileStore.Store(content.FileName(), r); err != nil {
+			fileName, file, err := content.ToMarkdown()
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to convert content to markdown")
+				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, fmt.Sprintf("Failed to convert content to markdown: %s", err))
+				continue
+			}
+
+			r := bytes.NewReader(file)
+			if err := fileStore.Store(fileName, r); err != nil {
 				log.Error().Err(err).Msg("Failed to store file locally")
 				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, err.Error())
 				continue
 			}
 
-			file, err := fileStore.Get(content.FileName())
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to get file")
-			}
-
-			if err := backend.UploadFile(ctx, content.FileName(), file); err != nil {
+			if err := backend.UploadFile(ctx, fileName, r); err != nil {
 				log.Error().Err(err).Msg("Failed to upload file")
 				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, err.Error())
 				continue
 			}
-
-			file.Close()
 
 			threadID, err := slackHandler.StartUploadThread(cmd.ChannelID, cmd.UserID, fmt.Sprintf("%s [%s]", content.FindTitle(), content.Metadata.Source))
 			if err != nil {
@@ -134,7 +134,7 @@ func main() {
 			}
 
 			if cmd.CommandType == slack.SummarizeCommand {
-				summary, err := backend.Prompt(ctx, threadID, prompt.SUMMARY_PROMPT_INSTRUCTIONS, prompt.CreateSummaryPrompt(content.FileName()))
+				summary, err := backend.Prompt(ctx, threadID, prompt.SUMMARY_PROMPT_INSTRUCTIONS, prompt.CreateSummaryPrompt(fileName))
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to prompt for summary")
 					slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, fmt.Sprintf("Failed to prompt for summary: %s", err))
