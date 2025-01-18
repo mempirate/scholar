@@ -113,9 +113,7 @@ func (d *Document) ToMarkdown() (string, []byte, error) {
 	builder.WriteString("---\n")
 	builder.Write(d.Content)
 
-	fileName := d.Metadata.Title + ".md"
-
-	return fileName, builder.Bytes(), nil
+	return d.FileName(), builder.Bytes(), nil
 }
 
 func sanitizeFileName(name string) string {
