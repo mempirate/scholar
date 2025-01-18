@@ -12,6 +12,7 @@ import (
 	"github.com/mempirate/scholar/content"
 	"github.com/mempirate/scholar/log"
 	"github.com/mempirate/scholar/prompt"
+	"github.com/mempirate/scholar/scrape"
 	"github.com/mempirate/scholar/slack"
 	"github.com/mempirate/scholar/store"
 	"github.com/openai/openai-go"
@@ -26,9 +27,9 @@ var (
 func main() {
 	flag.Parse()
 
-	key, appToken, botToken := os.Getenv("OPENAI_API_KEY"), os.Getenv("SLACK_APP_TOKEN"), os.Getenv("SLACK_BOT_TOKEN")
-	if key == "" || appToken == "" || botToken == "" {
-		panic("OPENAI_API_KEY || SLACK_APP_TOKEN || SLACK_BOT_TOKEN is not set")
+	key, appToken, botToken, fcKey := os.Getenv("OPENAI_API_KEY"), os.Getenv("SLACK_APP_TOKEN"), os.Getenv("SLACK_BOT_TOKEN"), os.Getenv("FIRECRAWL_API_KEY")
+	if key == "" || appToken == "" || botToken == "" || fcKey == "" {
+		panic("OPENAI_API_KEY || SLACK_APP_TOKEN || SLACK_BOT_TOKEN | FIRECRAWL_API_KEY is not set")
 	}
 
 	log := log.NewLogger("main")
@@ -59,7 +60,12 @@ func main() {
 
 	go slackHandler.Start()
 
-	contentHandler := content.NewContentHandler()
+	fc, err := scrape.NewFirecrawlScraper(fcKey)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create Firecrawl scraper")
+	}
+
+	contentHandler := content.NewContentHandler(fc)
 
 	for {
 		select {
@@ -81,29 +87,32 @@ func main() {
 			// We only de-duplicate uploads. If someone wants to summarize a file that already exists, we'll allow it, but we won't upload it again.
 			if cmd.CommandType == slack.UploadCommand {
 				// Handle content de-duplication
-				contains, err := fileStore.Contains(content.Name)
+				contains, err := fileStore.Contains(content.FindTitle())
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to check if content exists")
 					continue
 				}
 
 				if contains {
-					log.Info().Str("name", content.Name).Msg("File already exists, skipping")
+					log.Info().Str("name", content.FindTitle()).Msg("File already exists, skipping")
 					slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, "This file already exists.")
 					continue
 				}
 			}
 
 			r := bytes.NewReader(content.Content)
-			if err := fileStore.Store(content.Name, r); err != nil {
+			if err := fileStore.Store(content.FindTitle(), r); err != nil {
 				log.Error().Err(err).Msg("Failed to store file locally")
 				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, err.Error())
 				continue
 			}
 
-			file, err := fileStore.Get(content.Name)
+			file, err := fileStore.Get(content.FindTitle())
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to get file")
+			}
 
-			if err := backend.UploadFile(ctx, content.Name, file); err != nil {
+			if err := backend.UploadFile(ctx, content.FindTitle(), file); err != nil {
 				log.Error().Err(err).Msg("Failed to upload file")
 				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, err.Error())
 				continue
@@ -111,21 +120,30 @@ func main() {
 
 			file.Close()
 
-			threadID, err := slackHandler.StartUploadThread(cmd.ChannelID, cmd.UserID, fmt.Sprintf("%s [%s]", content.Name, content.URL))
+			threadID, err := slackHandler.StartUploadThread(cmd.ChannelID, cmd.UserID, fmt.Sprintf("%s [%s]", content.FindTitle(), content.Metadata.Source))
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to start upload thread")
+				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, fmt.Sprintf("Failed to start upload thread: %s", err))
+				continue
+			}
+
 			if err := backend.CreateThread(ctx, threadID); err != nil {
 				log.Error().Err(err).Msg("Failed to create thread")
+				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, fmt.Sprintf("Failed to create thread: %s", err))
 				continue
 			}
 
 			if cmd.CommandType == slack.SummarizeCommand {
-				summary, err := backend.Prompt(ctx, threadID, prompt.SUMMARY_PROMPT_INSTRUCTIONS, prompt.CreateSummaryPrompt(content.Name))
+				summary, err := backend.Prompt(ctx, threadID, prompt.SUMMARY_PROMPT_INSTRUCTIONS, prompt.CreateSummaryPrompt(content.FindTitle()))
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to prompt for summary")
+					slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, fmt.Sprintf("Failed to prompt for summary: %s", err))
 					continue
 				}
 
 				if err := slackHandler.PostMessage(cmd.ChannelID, &threadID, summary); err != nil {
 					log.Error().Err(err).Msg("Failed to post summary")
+					slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, fmt.Sprintf("Failed to post summary: %s", err))
 					continue
 				}
 			}
