@@ -1,12 +1,16 @@
-package twitter
+package scrape
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/mempirate/scholar/document"
 )
 
 const ENDPOINT = "https://api.x.com/2/"
@@ -57,9 +61,9 @@ type Tweet struct {
 	Text      string `json:"text"`
 }
 
-// GetTweet returns a Tweet by ID. It also returns referenced tweets with depth 1, where referenced
+// GetTweet returns a Tweet by ID, in document format. It also returns referenced tweets with depth 1, where referenced
 // tweets are tweets that are quoted or replied to.
-func GetTweet(id string) (*TweetData, error) {
+func GetTweet(id string) (*document.Document, error) {
 	// Get tweet by ID
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", ENDPOINT+"tweets/"+id, nil)
@@ -143,9 +147,34 @@ func GetTweet(id string) (*TweetData, error) {
 		}
 	}
 
-	return &TweetData{
-		Tweet:         t,
-		QuotedTweets:  quotedTweets,
-		RepliedTweets: repliedTweets,
-	}, nil
+	d := &document.Document{}
+
+	var content bytes.Buffer
+
+	// TODO: probably have different documents per tweet, linked by metadata through IDs
+	for _, replied := range repliedTweets {
+		content.WriteString(fmt.Sprintf("> %s\n", replied.Text))
+		content.WriteString(fmt.Sprintf("> - %s\n", replied.Username))
+	}
+
+	content.WriteString(t.Text)
+
+	for _, quoted := range quotedTweets {
+		content.WriteString("Quoted tweet:\n")
+		content.WriteString(fmt.Sprintf("> %s\n", quoted.Text))
+		content.WriteString(fmt.Sprintf("> - %s\n", quoted.Username))
+	}
+
+	tweetURL := fmt.Sprintf("https://twitter.com/%s/status/%s", t.Username, t.ID)
+
+	d.Content = content.Bytes()
+	d.Metadata.ID = t.ID
+	d.Metadata.Title = t.ID
+	d.Metadata.Authors = []string{t.Username}
+	d.Metadata.PublishedTime = &t.CreatedAt
+	d.Metadata.ProcessedTime = time.Now().Format(time.RFC3339)
+	d.Metadata.Source = tweetURL
+	d.Metadata.Type = document.TypeTweet
+
+	return d, nil
 }

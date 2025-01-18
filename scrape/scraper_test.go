@@ -12,19 +12,19 @@ func TestScrapeArticle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	uri, _ := url.Parse("https://www.asymmetric.re/blog/corrupt-commitments-proposer-equivocation-bug-in-helix-mev-relay")
+	uri, _ := url.Parse("https://github.com/opentimestamps/opentimestamps-server/blob/master/README.md")
 
 	doc, err := fc.Scrape(uri)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	name, content, err := doc.ToMarkdown()
+	_, content, err := doc.ToMarkdown()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	os.WriteFile(name, []byte(content), 0644)
+	os.WriteFile("README", []byte(content), 0644)
 }
 
 func TestScrapePDF(t *testing.T) {

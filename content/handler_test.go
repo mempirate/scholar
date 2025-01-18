@@ -5,10 +5,17 @@ import (
 	"net/url"
 	"os"
 	"testing"
+
+	"github.com/mempirate/scholar/document"
+	"github.com/mempirate/scholar/scrape"
 )
 
 func TestRegexID(t *testing.T) {
-	h := NewContentHandler()
+	fc, err := scrape.NewFirecrawlScraper(os.Getenv("FIRECRAWL_API_KEY"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewContentHandler(fc)
 
 	urls := []string{
 		"https://x.com/tarunchitra/status/1874532036297490554",
@@ -29,7 +36,11 @@ func TestRegexID(t *testing.T) {
 }
 
 func TestHandleWebPage(t *testing.T) {
-	h := NewContentHandler()
+	fc, err := scrape.NewFirecrawlScraper(os.Getenv("FIRECRAWL_API_KEY"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewContentHandler(fc)
 
 	// link := "https://collective.flashbots.net/t/the-role-of-relays-in-reorgs/4247"
 	link := "https://vitalik.eth.limo/general/2025/01/05/dacc2.html"
@@ -44,44 +55,51 @@ func TestHandleWebPage(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if content.Type != TypeArticle {
-		t.Errorf("unexpected type: %s", content.Type)
+	if content.Metadata.Type != document.TypeArticle {
+		t.Errorf("unexpected type: %s", content.Metadata.Type)
 	}
 
-	fmt.Println(content.Name)
+	fmt.Println(content.Metadata.Title)
 
-	os.WriteFile(content.Name, content.Content, 0644)
+	os.WriteFile(content.Metadata.Title, content.Content, 0644)
 }
 
 func TestGithubMarkdown(t *testing.T) {
-	h := NewContentHandler()
+	fc, err := scrape.NewFirecrawlScraper(os.Getenv("FIRECRAWL_API_KEY"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewContentHandler(fc)
 
 	urls := []string{
 		"https://github.com/opentimestamps/opentimestamps-server/blob/master/doc/merkle-mountain-range.md",
 		"https://github.com/opentimestamps/opentimestamps-server/blob/master/README.md",
 	}
 
-	names := []string{
-		"opentimestamps-server-merkle-mountain-range.md",
-		"opentimestamps-server-README.md",
-	}
-
 	for i, link := range urls {
 		uri, _ := url.Parse(link)
 
-		content, err := h.handleGithubMarkdown(uri)
+		doc, err := h.handleGithubMarkdown(uri)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
-		if content.Type != TypeArticle {
-			t.Errorf("unexpected type: %s", content.Type)
+		_, content, err := doc.ToMarkdown()
+		if err != nil {
+			t.Fatal(err)
 		}
 
-		if content.Name != names[i] {
-			t.Errorf("unexpected name: %s", content.Name)
+		os.WriteFile(fmt.Sprint(i), content, 0644)
+
+		if doc.Metadata.Type != document.TypeArticle {
+			t.Errorf("unexpected type: %s", doc.Metadata.Type)
 		}
 
-		os.WriteFile(content.Name, content.Content, 0644)
+		name, content, err := doc.ToMarkdown()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		os.WriteFile(name, content, 0644)
 	}
 }

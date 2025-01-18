@@ -1,6 +1,7 @@
 package document
 
 import (
+	"bytes"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -22,8 +23,9 @@ const (
 // TODO: turn into YAML front matter
 type Metadata struct {
 	Title string `yaml:"title"`
+	ID    string `yaml:"id,omitempty"`
 	// Description: either Description or OGDescription
-	Description *string  `yaml:"description"`
+	Description *string  `yaml:"description,omitempty"`
 	Keywords    []string `yaml:"keywords,omitempty"`
 	Authors     []string `yaml:"authors,omitempty"`
 	Source      string   `yaml:"source"`
@@ -38,7 +40,7 @@ type Metadata struct {
 
 type Document struct {
 	// The markdown content of the scraped document.
-	Content string
+	Content []byte
 	// Metadata about the document.
 	Metadata Metadata
 }
@@ -64,42 +66,49 @@ func (d *Document) FindTitle() string {
 	doc := md.Parser().Parse(reader)
 
 	var title string
-	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		if heading, ok := n.(*ast.Heading); ok && entering && heading.Level == 1 {
-			var titleBuilder strings.Builder
-			// Walk through child nodes of the heading
-			for child := heading.FirstChild(); child != nil; child = child.NextSibling() {
-				if text, ok := child.(*ast.Text); ok {
-					titleBuilder.Write(text.Segment.Value(content))
+	for level := 1; level <= 6; level++ {
+		found := false
+		ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+			if heading, ok := n.(*ast.Heading); ok && entering && heading.Level == level {
+				var titleBuilder strings.Builder
+				for child := heading.FirstChild(); child != nil; child = child.NextSibling() {
+					if text, ok := child.(*ast.Text); ok {
+						titleBuilder.Write(text.Segment.Value(content))
+					}
 				}
+				title = titleBuilder.String()
+				found = true
+				return ast.WalkStop, nil
 			}
-			title = titleBuilder.String()
-			return ast.WalkStop, nil
+			return ast.WalkContinue, nil
+		})
+		if found {
+			break
 		}
-		return ast.WalkContinue, nil // Changed from WalkStop to allow continuing if not h1
-	})
+	}
 
+	d.Metadata.Title = title
 	return title
 }
 
 // ToMarkdown converts the Document to a markdown string, with metadata as YAML front matter.
 // It returns the filename and the markdown content, and an optional error.
-func (d *Document) ToMarkdown() (string, string, error) {
+func (d *Document) ToMarkdown() (string, []byte, error) {
 	// Make sure title is set
 	d.FindTitle()
 
-	var builder strings.Builder
+	var builder bytes.Buffer
 	frontMatter, err := yaml.Marshal(d.Metadata)
 	if err != nil {
-		return "", "", errors.Wrap(err, "failed to marshal metadata to YAML")
+		return "", nil, errors.Wrap(err, "failed to marshal metadata to YAML")
 	}
 
 	builder.WriteString("---\n")
 	builder.Write(frontMatter)
 	builder.WriteString("---\n")
-	builder.WriteString(d.Content)
+	builder.Write(d.Content)
 
 	fileName := d.Metadata.Title + ".md"
 
-	return fileName, builder.String(), nil
+	return fileName, builder.Bytes(), nil
 }

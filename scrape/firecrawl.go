@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/mempirate/scholar/document"
+
 	"github.com/mendableai/firecrawl-go"
 	"github.com/pkg/errors"
 )
@@ -105,28 +106,34 @@ func (s *FirecrawlScraper) Scrape(url *url.URL) (*document.Document, error) {
 		source = *md.SourceURL
 	}
 
-	var ty document.Type
-	if title == "" {
-		// TODO: Simple rule, might not always work
-		ty = document.TypePDF
-	} else {
-		ty = document.TypeArticle
-	}
-
-	return &document.Document{
-		Content: fcDoc.Markdown,
+	doc := &document.Document{
+		Content: []byte(fcDoc.Markdown),
 		Metadata: document.Metadata{
 			Title:         title,
 			Description:   description,
 			Keywords:      []string{}, // TODO: with extract
 			Authors:       []string{}, // TODO: use extract API
 			Source:        source,
-			Type:          ty,
 			SiteName:      md.OGSiteName,
 			PublishedTime: md.PublishedTime,
 			ModifiedTime:  md.ModifiedTime,
 			ProcessedTime: time.Now().Format(time.RFC3339),
 			Links:         fcDoc.Links,
 		},
-	}, nil
+	}
+
+	// Attempt to find the title in the document content
+	doc.FindTitle()
+
+	var ty document.Type
+	if doc.Metadata.Title == "" {
+		// TODO: Simple rule, might not always work
+		ty = document.TypePDF
+	} else {
+		ty = document.TypeArticle
+	}
+
+	doc.Metadata.Type = ty
+
+	return doc, nil
 }
