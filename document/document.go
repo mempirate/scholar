@@ -107,10 +107,11 @@ func (d *Document) ToMarkdown() (string, []byte, error) {
 	if err != nil {
 		return "", nil, errors.Wrap(err, "failed to marshal metadata to YAML")
 	}
+	_ = frontMatter
 
-	builder.WriteString("---\n")
-	builder.Write(frontMatter)
-	builder.WriteString("---\n")
+	// builder.WriteString("---\n")
+	// builder.Write(frontMatter)
+	// builder.WriteString("---\n")
 	builder.Write(d.Content)
 
 	return d.FileName(), builder.Bytes(), nil
