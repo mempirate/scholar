@@ -115,6 +115,9 @@ func main() {
 				continue
 			}
 
+			remote.Len()
+			log.Info().Int("size", remote.Len()).Msg("Uploading file")
+
 			if err := backend.UploadFile(ctx, fileName, remote); err != nil {
 				log.Error().Err(err).Msg("Failed to upload file")
 				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, err.Error())
