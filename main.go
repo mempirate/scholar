@@ -87,32 +87,32 @@ func main() {
 			// We only de-duplicate uploads. If someone wants to summarize a file that already exists, we'll allow it, but we won't upload it again.
 			if cmd.CommandType == slack.UploadCommand {
 				// Handle content de-duplication
-				contains, err := fileStore.Contains(content.FindTitle())
+				contains, err := fileStore.Contains(content.FileName())
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to check if content exists")
 					continue
 				}
 
 				if contains {
-					log.Info().Str("name", content.FindTitle()).Msg("File already exists, skipping")
+					log.Info().Str("name", content.FileName()).Msg("File already exists, skipping")
 					slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, "This file already exists.")
 					continue
 				}
 			}
 
 			r := bytes.NewReader(content.Content)
-			if err := fileStore.Store(content.FindTitle(), r); err != nil {
+			if err := fileStore.Store(content.FileName(), r); err != nil {
 				log.Error().Err(err).Msg("Failed to store file locally")
 				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, err.Error())
 				continue
 			}
 
-			file, err := fileStore.Get(content.FindTitle())
+			file, err := fileStore.Get(content.FileName())
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to get file")
 			}
 
-			if err := backend.UploadFile(ctx, content.FindTitle(), file); err != nil {
+			if err := backend.UploadFile(ctx, content.FileName(), file); err != nil {
 				log.Error().Err(err).Msg("Failed to upload file")
 				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, err.Error())
 				continue
@@ -134,7 +134,7 @@ func main() {
 			}
 
 			if cmd.CommandType == slack.SummarizeCommand {
-				summary, err := backend.Prompt(ctx, threadID, prompt.SUMMARY_PROMPT_INSTRUCTIONS, prompt.CreateSummaryPrompt(content.FindTitle()))
+				summary, err := backend.Prompt(ctx, threadID, prompt.SUMMARY_PROMPT_INSTRUCTIONS, prompt.CreateSummaryPrompt(content.FileName()))
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to prompt for summary")
 					slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, fmt.Sprintf("Failed to prompt for summary: %s", err))

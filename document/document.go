@@ -49,6 +49,10 @@ func (d *Document) HasTitle() bool {
 	return d.Metadata.Title != ""
 }
 
+func (d *Document) FileName() string {
+	return d.Metadata.Title + ".md"
+}
+
 func (d *Document) FindTitle() string {
 	// If the title is already set, return it.
 	if d.Metadata.Title != "" {
