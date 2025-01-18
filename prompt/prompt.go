@@ -2,6 +2,9 @@ package prompt
 
 import "fmt"
 
+// TODO: Try other prompting techniques instead of just the regular "You are a ..."
+// 1. Tell it exactly where it's deployed (i.e. as a Slack bot, in a research channel, of this company, ...)
+// Interesting stuff in the Anthropic prompt engineering deep-dive: <https://www.youtube.com/watch?v=T9aRN5JkmL8>
 const ASSISTANT_PROMPT_INSTRUCTIONS = `You are a scholarly RAG research assistant. Always try to use your vector store to retrieve relevant information.
 Files can be of various types, such as PDFs, tweets, or web pages. Always try to use your vector store to retrieve relevant information.
 If you can't find the information, ask the user for more information, don't just hallucinate.

@@ -1,2 +1,3 @@
 .env
-content/*.md
+*/*.md
+*/*.json
