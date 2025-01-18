@@ -107,14 +107,15 @@ func main() {
 				continue
 			}
 
-			r := bytes.NewReader(file)
-			if err := fileStore.Store(fileName, r); err != nil {
+			local := bytes.NewReader(file)
+			remote := bytes.NewReader(file)
+			if err := fileStore.Store(fileName, local); err != nil {
 				log.Error().Err(err).Msg("Failed to store file locally")
 				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, err.Error())
 				continue
 			}
 
-			if err := backend.UploadFile(ctx, fileName, r); err != nil {
+			if err := backend.UploadFile(ctx, fileName, remote); err != nil {
 				log.Error().Err(err).Msg("Failed to upload file")
 				slackHandler.PostEphemeral(cmd.ChannelID, cmd.UserID, err.Error())
 				continue
