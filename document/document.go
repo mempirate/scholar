@@ -2,6 +2,7 @@ package document
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -50,7 +51,7 @@ func (d *Document) HasTitle() bool {
 }
 
 func (d *Document) FileName() string {
-	return d.Metadata.Title + ".md"
+	return sanitizeFileName(d.Metadata.Title) + ".md"
 }
 
 func (d *Document) FindTitle() string {
@@ -115,4 +116,11 @@ func (d *Document) ToMarkdown() (string, []byte, error) {
 	fileName := d.Metadata.Title + ".md"
 
 	return fileName, builder.Bytes(), nil
+}
+
+func sanitizeFileName(name string) string {
+	re := regexp.MustCompile(`[\/\\:\*\?"<>\|\p{C}]`)
+
+	name = re.ReplaceAllString(name, "-")
+	return strings.Trim(name, " .")
 }
