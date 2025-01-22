@@ -26,10 +26,12 @@ func NewFirecrawlScraper(key string) (*FirecrawlScraper, error) {
 	}
 
 	scrapePDF := true
+	timeout := 90_000
 
 	defaultParams := &firecrawl.ScrapeParams{
 		Formats:  []string{"markdown", "links"},
 		ParsePDF: &scrapePDF,
+		Timeout:  &timeout,
 	}
 
 	return &FirecrawlScraper{
